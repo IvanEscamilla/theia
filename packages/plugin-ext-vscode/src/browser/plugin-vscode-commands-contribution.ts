@@ -199,6 +199,9 @@ export class PluginVscodeCommandsContribution implements CommandContribution {
         commands.registerCommand({ id: 'undo' }, {
             execute: () => commands.executeCommand(CommonCommands.UNDO.id)
         });
+        commands.registerCommand({ id: 'redo' }, {
+            execute: () => commands.executeCommand(CommonCommands.REDO.id)
+        });
         commands.registerCommand({ id: 'editor.action.startFindReplaceAction' }, {
             execute: () => commands.executeCommand(CommonCommands.REPLACE.id)
         });

@@ -26,6 +26,7 @@ import { MonacoEditor } from './monaco-editor';
 import { MonacoCommandRegistry, MonacoEditorCommandHandler } from './monaco-command-registry';
 import MenuRegistry = monaco.actions.MenuRegistry;
 import { MonacoCommandService } from './monaco-command-service';
+import { MonacoEditorService } from './monaco-editor-service';
 
 // vs code doesn't use iconClass anymore, but icon instead, so some adaptation is required to reuse it on theia side
 export type MonacoIcon = { dark?: monaco.Uri; light?: monaco.Uri } | monaco.theme.ThemeIcon;
@@ -93,6 +94,9 @@ export class MonacoEditorCommandHandlers implements CommandContribution {
 
     @inject(QuickOpenService)
     protected readonly quickOpenService: QuickOpenService;
+
+    @inject(MonacoEditorService)
+    protected readonly editorService: MonacoEditorService;
 
     registerCommands(): void {
         this.registerCommonCommandHandlers();
@@ -266,15 +270,42 @@ export class MonacoEditorCommandHandlers implements CommandContribution {
         return delegate ? this.newDelegateHandler(delegate) : this.newActionHandler(action.id);
     }
 
-    protected newKeyboardHandler(action: string): MonacoEditorCommandHandler {
+    private newCodeEditorServiceAccessor(): monaco.instantiation.ServicesAccessor {
         return {
-            execute: (editor, ...args) => {
-                const modelData = editor.getControl()._modelData;
-                if (modelData) {
-                    modelData.cursor.trigger('keyboard', action, args);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            get: <T>(id: monaco.instantiation.ServiceIdentifier<T>) => {
+                if (id !== monaco.services.ICodeEditorService) {
+                    throw new Error(`Unhandled service identified: ${id.type}.`);
                 }
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                return this.editorService as any as T;
             }
         };
+    }
+
+    protected newKeyboardHandler(id: string): MonacoEditorCommandHandler {
+        const editorCommand = monaco.editorExtensions.EditorExtensionsRegistry.getEditorCommand(id);
+        if (editorCommand) {
+            return {
+                // eslint-disable-next-line no-null/no-null
+                execute: (editor, ...args) => editorCommand.runCommand(this.newCodeEditorServiceAccessor(), args)
+            };
+        }
+        const command = monaco.commands.CommandsRegistry.getCommand(id);
+        if (command) {
+            return {
+                execute: (editor, ...args) => command.handler(this.newCodeEditorServiceAccessor(), args)
+            };
+        }
+        // return {
+        //     execute: (editor, ...args) => {
+        //         const modelData = editor.getControl()._modelData;
+        //         if (modelData) {
+        //             modelData.cursor.trigger('keyboard', id, args);
+        //         }
+        //     }
+        // };
+        throw new Error(`Unhandled keyboard event. ID: ${id}`);
     }
     protected newCommandHandler(action: string): MonacoEditorCommandHandler {
         return {
